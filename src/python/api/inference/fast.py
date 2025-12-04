@@ -16,10 +16,11 @@ import fastapi.middleware.cors
 import tyro
 import uvicorn
 from azure.storage.blob import ContainerClient
-from attr import dataclass
+from attrs import define as dataclass
 from fastapi import Request
 from fastapi.responses import Response
 
+# Import TTS directly since we're on NVIDIA VPS
 from fam.llm.fast_inference import TTS
 from fam.llm.utils import check_audio_file
 
@@ -66,13 +67,13 @@ os.makedirs(output_dir, exist_ok=True)
 os.makedirs(voice_dir, exist_ok=True)
 os.makedirs(text_dir, exist_ok=True)
 os.makedirs('.data/tmp', exist_ok=True)
+
 ## Setup FastAPI server.
 app = FastAPI()
 
 
 def inference(connection_string: str, input_container_name: str, output_container_name: str, voices_container_name: str, reference_voice: str,  text_file: str = None):
-    # authentiacate in azure
-
+    # authenticate in azure
     input_blob = azure_initiate(input_container_name, connection_string)
     result_blob = azure_initiate(output_container_name, connection_string)
     voices_blob = azure_initiate(voices_container_name, connection_string)
@@ -100,13 +101,11 @@ def inference(connection_string: str, input_container_name: str, output_containe
                 voice.readinto(f)
 
     # TTS process: 
-    
     tts_req = TTSRequest(text=text, speaker_ref_path=voice_local_path)
     with tempfile.NamedTemporaryFile(suffix=".wav") as wav_tmp:
         if tts_req.speaker_ref_path is None:
             wav_path = "./assets/bria.mp3"
         else:
-            # TODO: fix
             wav_path = tts_req.speaker_ref_path
 
         if wav_path is None:
@@ -157,17 +156,15 @@ class ServingConfig:
     port: int = 58003
 
 
-# Singleton
+# Singleton - Initialize with TTS model loaded
 class _GlobalState:
     def __init__(self):
-        self.config = ServingConfig()  # Initialize config
-        self.tts = TTS()  # Initialize tts
+        self.config = ServingConfig()
+        self.tts = None  # Will be initialized in main
 
 
 GlobalState = _GlobalState()
 
-# GlobalState.config = tyro.cli(ServingConfig)
-# GlobalState.tts = TTS(seed=GlobalState.config.seed)
 
 @dataclass(frozen=True)
 class TTSRequest:
@@ -225,7 +222,6 @@ async def text_to_speech(req: Request):
                 wav_path = _convert_audiodata_to_wav_path(audiodata, wav_tmp)
                 check_audio_file(wav_path)
             else:
-                # TODO: fix
                 wav_path = tts_req.speaker_ref_path
 
             if wav_path is None:
@@ -242,7 +238,6 @@ async def text_to_speech(req: Request):
         with open(wav_out_path, "rb") as f:
             return Response(content=f.read(), media_type="audio/wav")
     except Exception as e:
-        # traceback_str = "".join(traceback.format_tb(e.__traceback__))
         logger.exception(f"Error processing request {payload}")
         return Response(
             content="Something went wrong. Please try again in a few mins or contact us on Discord",
@@ -274,6 +269,7 @@ if __name__ == "__main__":
     logging.root.setLevel(logging.INFO)
 
     GlobalState.config = tyro.cli(ServingConfig)
+    # Initialize TTS model at startup (no lazy loading)
     GlobalState.tts = TTS(seed=GlobalState.config.seed)
 
     app.add_middleware(

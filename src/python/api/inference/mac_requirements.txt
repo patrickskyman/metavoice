@@ -1,0 +1,38 @@
+# Core Audio & Math
+torch
+torchaudio
+numpy
+librosa
+scipy
+
+# API & Utils
+fastapi
+uvicorn
+tyro
+tqdm
+black
+flake8
+tiktoken
+attr
+pydub
+
+# AI & Models
+# We remove strict pinning for audiocraft to let it resolve
+#audiocraft
+# pip3 install audiocraft --no-deps
+# export xformers
+#  uvicorn main:app --host 0.0.0.0
+demucs
+deepfilternet
+gradio
+huggingface_hub
+nltk
+
+# Azure (Keep these strictly pinned as they are likely less volatile)
+azure-core==1.29.7
+azure-identity==1.15.0
+azure-storage-blob==12.19.0
+azure-storage-queue==12.9.0
+
+# Modern AV that supports FFMPEG 7+
+av>=12.0.0

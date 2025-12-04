@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaVoice TTS Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        input, textarea, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 MetaVoice TTS Tester</h1>
+        
+        <div class="section">
+            <h3>1. Health Check</h3>
+            <button onclick="checkHealth()">Check API Health</button>
+            <div id="healthStatus"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. Test TTS (with audio file)</h3>
+            <label>Server URL:</label>
+            <input type="text" id="serverUrl" value="http://174.91.229.149:58003" placeholder="http://your-server:58003">
+            
+            <label>Text to Synthesize:</label>
+            <textarea id="ttsText" rows="3" placeholder="Enter text to convert to speech...">Hello, this is a test of the MetaVoice text to speech system.</textarea>
+            
+            <label>Reference Voice Audio (WAV file):</label>
+            <input type="file" id="audioFile" accept="audio/*">
+            
+            <button onclick="testTTS()">Generate Speech</button>
+            <div id="ttsStatus"></div>
+            <div id="audioPlayer"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. Test Azure Endpoints</h3>
+            <label>Connection String:</label>
+            <input type="text" id="connString" placeholder="Azure connection string">
+            
+            <label>Text File Name:</label>
+            <input type="text" id="textFile" placeholder="text.txt">
+            
+            <label>Reference Voice File Name:</label>
+            <input type="text" id="voiceFile" placeholder="voice.wav">
+            
+            <button onclick="testAzureShort()">Test Short Text Processing</button>
+            <div id="azureStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        async function checkHealth() {
+            const statusDiv = document.getElementById('healthStatus');
+            const serverUrl = document.getElementById('serverUrl').value;
+            
+            statusDiv.innerHTML = '<div class="status info">Checking health...</div>';
+            
+            try {
+                const response = await fetch(`${serverUrl}/health`);
+                const data = await response.json();
+                
+                if (data.status === 'ok') {
+                    statusDiv.innerHTML = '<div class="status success">✅ Server is healthy!</div>';
+                } else {
+                    statusDiv.innerHTML = '<div class="status error">❌ Unexpected response: ' + JSON.stringify(data) + '</div>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+
+        async function testTTS() {
+            const statusDiv = document.getElementById('ttsStatus');
+            const audioPlayerDiv = document.getElementById('audioPlayer');
+            const serverUrl = document.getElementById('serverUrl').value;
+            const text = document.getElementById('ttsText').value;
+            const audioFile = document.getElementById('audioFile').files[0];
+
+            if (!text) {
+                statusDiv.innerHTML = '<div class="status error">❌ Please enter text</div>';
+                return;
+            }
+
+            if (!audioFile) {
+                statusDiv.innerHTML = '<div class="status error">❌ Please select an audio file</div>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<div class="status info">🔄 Generating speech...</div>';
+            audioPlayerDiv.innerHTML = '';
+
+            try {
+                const audioData = await audioFile.arrayBuffer();
+                const payload = JSON.stringify({
+                    text: text,
+                    guidance: 3.0,
+                    top_p: 0.95
+                });
+
+                const response = await fetch(`${serverUrl}/tts`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Payload': payload,
+                        'Content-Type': 'application/octet-stream'
+                    },
+                    body: audioData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                statusDiv.innerHTML = '<div class="status success">✅ Speech generated successfully!</div>';
+                audioPlayerDiv.innerHTML = `
+                    <audio controls>
+                        <source src="${url}" type="audio/wav">
+                        Your browser does not support the audio element.
+                    </audio>
+                    <br>
+                    <a href="${url}" download="output.wav">
+                        <button type="button">Download Audio</button>
+                    </a>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+
+        async function testAzureShort() {
+            const statusDiv = document.getElementById('azureStatus');
+            const serverUrl = document.getElementById('serverUrl').value;
+            const connString = document.getElementById('connString').value;
+            const textFile = document.getElementById('textFile').value;
+            const voiceFile = document.getElementById('voiceFile').value;
+
+            if (!connString || !textFile || !voiceFile) {
+                statusDiv.innerHTML = '<div class="status error">❌ Please fill in all fields</div>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<div class="status info">🔄 Processing...</div>';
+
+            try {
+                const params = new URLSearchParams({
+                    connection_string: connString,
+                    input_container_name: 'requests',
+                    output_container_name: 'results',
+                    voices_container_name: 'voices',
+                    reference_voice: voiceFile,
+                    text_file: textFile
+                });
+
+                const response = await fetch(`${serverUrl}/process_short_text?${params}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusDiv.innerHTML = '<div class="status success">✅ Success! ' + JSON.stringify(data, null, 2) + '</div>';
+                } else {
+                    statusDiv.innerHTML = '<div class="status error">❌ Response: ' + JSON.stringify(data, null, 2) + '</div>';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+    </script>
+</body>
+</html>
