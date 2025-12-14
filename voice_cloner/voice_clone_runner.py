@@ -16,8 +16,8 @@ By default this uses `http://127.0.0.1:8000/tts`. Set `LOCAL_TTS_ENDPOINT`,
 `TEXT_FILE_LOCAL` and `REFERENCE_VOICE_LOCAL` via environment variables if needed.
 """
 
-# Local FastAPI TTS endpoint (change port if you started uvicorn on a different port)
-LOCAL_TTS_ENDPOINT = os.environ.get("LOCAL_TTS_ENDPOINT", "http://127.0.0.1:58003/tts")
+# MetaVoice TTS endpoint (hosted on Vast.ai)
+LOCAL_TTS_ENDPOINT = os.environ.get("LOCAL_TTS_ENDPOINT", "http://77.104.167.149:45774/tts")
 
 TEXT_FILE_LOCAL = os.environ.get("TEXT_FILE_LOCAL", os.path.expanduser("~/voice_cloner/voice.txt"))
 REFERENCE_VOICE_LOCAL = os.environ.get("REFERENCE_VOICE_LOCAL", os.path.expanduser("~/voice_cloner/patrick_voice.wav"))
@@ -59,7 +59,7 @@ def call_local_tts(text_file_path: str, ref_voice_path: str, out_path: str = "ou
     print(f"🔄 Sending local TTS request to {LOCAL_TTS_ENDPOINT} (this may trigger model initialization)")
 
     try:
-        resp = requests.post(LOCAL_TTS_ENDPOINT, data=audio_bytes, headers=headers, timeout=900)
+        resp = requests.post(LOCAL_TTS_ENDPOINT, data=audio_bytes, headers=headers, timeout=1800)
     except requests.RequestException as e:
         print(f"❌ Request failed: {e}")
         return False

@@ -41,8 +41,14 @@ def retrieve_file(container_client, file_name):
     return container_client.get_blob_client(file_name)
 
 def split_into_sentences(text):
-    nltk.download('punkt')  # Download the Punkt tokenizer.
-    return nltk.tokenize.sent_tokenize(text)
+    try:
+        nltk.download('punkt_tab', quiet=True)  # Download the new Punkt tokenizer
+        return nltk.tokenize.sent_tokenize(text)
+    except:
+        # Fallback to simple sentence splitting if NLTK fails
+        import re
+        sentences = re.split(r'[.!?]+', text)
+        return [s.strip() for s in sentences if s.strip()]
 
 def combine_wav_files(input_files, output_file):
     data = []
@@ -160,10 +166,19 @@ class ServingConfig:
 class _GlobalState:
     def __init__(self):
         self.config = ServingConfig()
-        self.tts = None  # Will be initialized in main
+        self.tts = None  # Will be initialized in startup
 
 
 GlobalState = _GlobalState()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize TTS model on startup"""
+    if GlobalState.tts is None:
+        print("Initializing TTS model...")
+        GlobalState.tts = TTS(seed=GlobalState.config.seed)
+        print("TTS model initialized successfully")
 
 
 @dataclass(frozen=True)
@@ -228,12 +243,35 @@ async def text_to_speech(req: Request):
                 warnings.warn("Running without speaker reference")
                 assert tts_req.guidance is None
 
-            wav_out_path = GlobalState.tts.synthesise(
-                text=tts_req.text,
-                spk_ref_path=wav_path,
-                top_p=tts_req.top_p,
-                guidance_scale=tts_req.guidance,
-            )
+            # Handle long text by splitting into sentences
+            if len(tts_req.text.split()) > 10:
+                sentences = split_into_sentences(tts_req.text)
+                list_of_wav_out = []
+                for sentence in sentences:
+                    if sentence.strip():  # Skip empty sentences
+                        wav_sentence_path = GlobalState.tts.synthesise(
+                            text=sentence,
+                            spk_ref_path=wav_path,
+                            top_p=tts_req.top_p,
+                            guidance_scale=tts_req.guidance,
+                        )
+                        list_of_wav_out.append(wav_sentence_path)
+                
+                # Combine all sentence audio files
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as combined_tmp:
+                    wav_out_path = combined_tmp.name
+                combine_wav_files(list_of_wav_out, wav_out_path)
+                
+                # Clean up individual sentence files
+                for wav_file in list_of_wav_out:
+                    Path(wav_file).unlink(missing_ok=True)
+            else:
+                wav_out_path = GlobalState.tts.synthesise(
+                    text=tts_req.text,
+                    spk_ref_path=wav_path,
+                    top_p=tts_req.top_p,
+                    guidance_scale=tts_req.guidance,
+                )
 
         with open(wav_out_path, "rb") as f:
             return Response(content=f.read(), media_type="audio/wav")
