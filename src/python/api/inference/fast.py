@@ -6,6 +6,7 @@ import tempfile
 import warnings
 import nltk
 import wave
+import gc
 from pathlib import Path
 from typing import Optional
 import torch
@@ -51,18 +52,19 @@ def split_into_sentences(text):
         return [s.strip() for s in sentences if s.strip()]
 
 def combine_wav_files(input_files, output_file):
-    data = []
+    if not input_files:
+        return
 
-    for file in input_files:
-        with wave.open(file, 'rb') as wav_file:
-            data.append([wav_file.getparams(), wav_file.readframes(wav_file.getnframes())])
-
-    output_params = data[0][0]
+    # Open the first file to get parameters
+    with wave.open(input_files[0], 'rb') as first_wav:
+        output_params = first_wav.getparams()
 
     with wave.open(output_file, 'wb') as output_wav_file:
         output_wav_file.setparams(output_params)
-        for params, frames in data:
-            output_wav_file.writeframes(frames)
+        
+        for file in input_files:
+            with wave.open(file, 'rb') as wav_file:
+                output_wav_file.writeframes(wav_file.readframes(wav_file.getnframes()))
 
 
 # create local paths
@@ -128,6 +130,8 @@ def inference(connection_string: str, input_container_name: str, output_containe
                     guidance_scale=tts_req.guidance,
                 )
                 list_of_wav_out.append(wav_out_path)
+                gc.collect()
+                torch.cuda.empty_cache()
             wav_out_path = "." + text_file.split(".")[1] + "_" + reference_voice.split(".")[0] + "_meta" + ".wav"
             combine_wav_files(list_of_wav_out, wav_out_path)
         else: 
@@ -256,6 +260,8 @@ async def text_to_speech(req: Request):
                             guidance_scale=tts_req.guidance,
                         )
                         list_of_wav_out.append(wav_sentence_path)
+                        gc.collect()
+                        torch.cuda.empty_cache()
                 
                 # Combine all sentence audio files
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as combined_tmp:

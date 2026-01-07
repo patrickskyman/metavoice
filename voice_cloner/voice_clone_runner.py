@@ -19,8 +19,8 @@ By default this uses `http://127.0.0.1:8000/tts`. Set `LOCAL_TTS_ENDPOINT`,
 # MetaVoice TTS endpoint (hosted on Vast.ai)
 LOCAL_TTS_ENDPOINT = os.environ.get("LOCAL_TTS_ENDPOINT", "http://77.104.167.149:45774/tts")
 
-TEXT_FILE_LOCAL = os.environ.get("TEXT_FILE_LOCAL", os.path.expanduser("~/voice_cloner/voice.txt"))
-REFERENCE_VOICE_LOCAL = os.environ.get("REFERENCE_VOICE_LOCAL", os.path.expanduser("~/voice_cloner/patrick_voice.wav"))
+TEXT_FILE_LOCAL = os.environ.get("TEXT_FILE_LOCAL", "voice.txt")
+REFERENCE_VOICE_LOCAL = os.environ.get("REFERENCE_VOICE_LOCAL", "patrick_voice.wav")
 
 USE_LOCAL = True
 
@@ -57,6 +57,7 @@ def call_local_tts(text_file_path: str, ref_voice_path: str, out_path: str = "ou
         audio_bytes = af.read()
 
     print(f"🔄 Sending local TTS request to {LOCAL_TTS_ENDPOINT} (this may trigger model initialization)")
+    print("⏳ Please wait, this may take a while for longer text...")
 
     try:
         resp = requests.post(LOCAL_TTS_ENDPOINT, data=audio_bytes, headers=headers, timeout=1800)
